@@ -266,6 +266,30 @@ class DashboardController extends Controller
         ]);
     }
 
+    /**
+     * Admin: Ambil semua rangkuman dari semua user
+     */
+    public function allSummaries(): JsonResponse
+    {
+        $summaries = Summary::orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($s) {
+                return [
+                    'id' => $s->id,
+                    'user_id' => $s->user_id,
+                    'file_name' => $s->file_name,
+                    'status' => $s->status,
+                    'summary' => $s->summary,
+                    'created_at' => $s->created_at->format('Y-m-d H:i'),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $summaries,
+        ]);
+    }
+
     public function summarize(Request $request): JsonResponse
     {
         try {

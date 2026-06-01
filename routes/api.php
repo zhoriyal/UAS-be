@@ -29,6 +29,9 @@ Route::post('/admin/users/role', [UserController::class, 'updateRole']);
 // Dashboard Stats - Admin only
 Route::get('/admin/stats', [UserController::class, 'stats']);
 
+// Admin: lihat semua rangkuman dokumen user
+Route::get('/admin/summaries', [DashboardController::class, 'allSummaries']);
+
 // Dashboard - User (Tenggat Waktu, Keuangan, Laporan)
 Route::get('/dashboard/deadlines', [DashboardController::class, 'deadlines']);
 Route::post('/dashboard/deadlines', [DashboardController::class, 'storeDeadline']);
