@@ -40,4 +40,8 @@ return [
         'service_key' => env('SUPABASE_SERVICE_KEY', ''),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY', ''),
+    ],
+
 ];
