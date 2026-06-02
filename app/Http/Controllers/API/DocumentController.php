@@ -143,6 +143,142 @@ class DocumentController extends Controller
     }
 
     /**
+     * Upload bukti bayar (user)
+     */
+    public function uploadPaymentProof(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:10240',
+            'user_id' => 'required|string',
+            'user_name' => 'required|string',
+            'user_email' => 'required|email',
+            'payment_month' => 'required|integer|min:0|max:11',
+            'payment_year' => 'required|integer|min:2020|max:2030',
+        ]);
+
+        $file = $request->file('file');
+        $fileName = $file->getClientOriginalName();
+        $fileType = strtoupper(pathinfo($fileName, PATHINFO_EXTENSION));
+        $fileSize = $this->formatFileSize($file->getSize());
+
+        $path = $file->storeAs(
+            "payment_proofs/{$request->user_id}",
+            $fileName,
+            'public'
+        );
+
+        $document = Document::create([
+            'user_id' => $request->user_id,
+            'user_name' => $request->user_name,
+            'user_email' => $request->user_email,
+            'file_name' => $fileName,
+            'file_type' => $fileType,
+            'file_size' => $fileSize,
+            'file_path' => $path,
+            'status' => 'Tersimpan',
+            'category' => 'bukti_bayar',
+            'verification_status' => 'pending',
+            'payment_month' => $request->payment_month,
+            'payment_year' => $request->payment_year,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bukti bayar berhasil diupload. Menunggu verifikasi admin.',
+            'data' => $document,
+        ], 201);
+    }
+
+    /**
+     * Admin: Ambil semua bukti bayar yang perlu diverifikasi
+     */
+    public function getPaymentProofs(): JsonResponse
+    {
+        $proofs = Document::where('category', 'bukti_bayar')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($doc) {
+                return [
+                    'id' => $doc->id,
+                    'user_id' => $doc->user_id,
+                    'user_name' => $doc->user_name,
+                    'user_email' => $doc->user_email,
+                    'file_name' => $doc->file_name,
+                    'file_type' => $doc->file_type,
+                    'file_size' => $doc->file_size,
+                    'file_path' => $doc->file_path,
+                    'payment_month' => $doc->payment_month,
+                    'payment_year' => $doc->payment_year,
+                    'verification_status' => $doc->verification_status,
+                    'created_at' => $doc->created_at->format('Y-m-d H:i'),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $proofs,
+        ]);
+    }
+
+    /**
+     * Admin: Verifikasi bukti bayar
+     */
+    public function verifyPaymentProof(Request $request, string $id): JsonResponse
+    {
+        $request->validate([
+            'status' => 'required|string|in:approved,rejected',
+        ]);
+
+        $document = Document::findOrFail($id);
+
+        if ($document->category !== 'bukti_bayar') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dokumen ini bukan bukti bayar',
+            ], 400);
+        }
+
+        $document->update([
+            'verification_status' => $request->status,
+        ]);
+
+        $statusText = $request->status === 'approved' ? 'disetujui' : 'ditolak';
+
+        return response()->json([
+            'success' => true,
+            'message' => "Bukti bayar berhasil {$statusText}",
+            'data' => $document,
+        ]);
+    }
+
+    /**
+     * User: Ambil status verifikasi bukti bayar
+     */
+    public function getPaymentStatus(Request $request): JsonResponse
+    {
+        $proofs = Document::where('user_id', $request->user_id)
+            ->where('category', 'bukti_bayar')
+            ->orderBy('payment_year', 'desc')
+            ->orderBy('payment_month', 'desc')
+            ->get()
+            ->map(function ($doc) {
+                return [
+                    'id' => $doc->id,
+                    'file_name' => $doc->file_name,
+                    'payment_month' => $doc->payment_month,
+                    'payment_year' => $doc->payment_year,
+                    'verification_status' => $doc->verification_status,
+                    'created_at' => $doc->created_at->format('Y-m-d H:i'),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $proofs,
+        ]);
+    }
+
+    /**
      * Format ukuran file
      */
     private function formatFileSize(int $bytes): string

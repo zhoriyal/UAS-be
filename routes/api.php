@@ -5,6 +5,7 @@ use App\Http\Controllers\API\ArticleController;
 use App\Http\Controllers\API\DocumentController;
 use App\Http\Controllers\API\UserController;
 use App\Http\Controllers\API\DashboardController;
+use App\Http\Controllers\API\QuestionController;
 
 // Artikel - Public (user biasa)
 Route::get('/articles', [ArticleController::class, 'index']);
@@ -21,6 +22,14 @@ Route::get('/documents', [DocumentController::class, 'index']);
 Route::post('/documents', [DocumentController::class, 'store']);
 Route::delete('/documents/{id}', [DocumentController::class, 'destroy']);
 Route::get('/documents/{id}/download', [DocumentController::class, 'download']);
+
+// Bukti Bayar (User)
+Route::post('/payment-proofs', [DocumentController::class, 'uploadPaymentProof']);
+Route::get('/payment-proofs/status', [DocumentController::class, 'getPaymentStatus']);
+
+// Bukti Bayar (Admin)
+Route::get('/admin/payment-proofs', [DocumentController::class, 'getPaymentProofs']);
+Route::put('/admin/payment-proofs/{id}/verify', [DocumentController::class, 'verifyPaymentProof']);
 
 // User - Admin only
 Route::get('/admin/users', [UserController::class, 'index']);
@@ -53,3 +62,12 @@ Route::get('/dashboard/summaries', [DashboardController::class, 'summaries']);
 Route::post('/dashboard/summarize', [DashboardController::class, 'summarize']);
 Route::get('/dashboard/summaries/{id}', [DashboardController::class, 'summaryStatus']);
 Route::delete('/dashboard/summaries/{id}', [DashboardController::class, 'destroySummary']);
+
+// Pertanyaan Bantuan (User)
+Route::get('/questions', [QuestionController::class, 'index']);
+Route::post('/questions', [QuestionController::class, 'store']);
+Route::delete('/questions/{id}', [QuestionController::class, 'destroy']);
+
+// Pertanyaan Bantuan (Admin)
+Route::get('/admin/questions', [QuestionController::class, 'all']);
+Route::put('/admin/questions/{id}/answer', [QuestionController::class, 'answer']);

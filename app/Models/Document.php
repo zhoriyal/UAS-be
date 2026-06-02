@@ -15,5 +15,9 @@ class Document extends Model
         'file_size',
         'file_path',
         'status',
+        'category',
+        'verification_status',
+        'payment_month',
+        'payment_year',
     ];
 }
