@@ -34,6 +34,10 @@ Route::put('/admin/payment-proofs/{id}/verify', [DocumentController::class, 'ver
 // User - Admin only
 Route::get('/admin/users', [UserController::class, 'index']);
 Route::post('/admin/users/role', [UserController::class, 'updateRole']);
+Route::delete('/admin/users', [UserController::class, 'destroy']);
+
+// User - Public (cek apakah user masih ada)
+Route::post('/users/check', [UserController::class, 'checkUser']);
 
 // Dashboard Stats - Admin only
 Route::get('/admin/stats', [UserController::class, 'stats']);
@@ -60,8 +64,10 @@ Route::delete('/dashboard/reports/{id}', [DashboardController::class, 'destroyRe
 // Rangkum Dokumen (AI Summary)
 Route::get('/dashboard/summaries', [DashboardController::class, 'summaries']);
 Route::post('/dashboard/summarize', [DashboardController::class, 'summarize']);
+Route::post('/dashboard/summarize-text', [DashboardController::class, 'summarizeText']);
 Route::get('/dashboard/summaries/{id}', [DashboardController::class, 'summaryStatus']);
 Route::delete('/dashboard/summaries/{id}', [DashboardController::class, 'destroySummary']);
+Route::post('/dashboard/summaries/save-pdf', [DashboardController::class, 'saveSummaryAsPdf']);
 
 // Pertanyaan Bantuan (User)
 Route::get('/questions', [QuestionController::class, 'index']);

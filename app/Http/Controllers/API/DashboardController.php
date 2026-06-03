@@ -7,7 +7,9 @@ use App\Models\Deadline;
 use App\Models\Finance;
 use App\Models\Report;
 use App\Models\Summary;
+use App\Models\Document;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -356,6 +358,82 @@ class DashboardController extends Controller
         }
     }
 
+    /**
+     * Rangkum teks langsung (tanpa PDF)
+     */
+    public function summarizeText(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id' => 'required|string',
+            'text' => 'required|string|min:50',
+        ]);
+
+        try {
+            $summary = Summary::create([
+                'user_id' => $request->user_id,
+                'file_name' => 'Teks Langsung',
+                'file_path' => '',
+                'status' => 'processing',
+            ]);
+
+            $apiKey = config('services.gemini.api_key');
+
+            if (empty($apiKey)) {
+                $result = $this->generateFallbackSummary('Teks Langsung');
+            } else {
+                $text = substr($request->text, 0, 25000);
+
+                $prompt = "Anda adalah asisten pajak untuk UMKM Indonesia. "
+                    . "Rangkum teks berikut menjadi poin-poin penting yang mudah dipahami oleh pelaku usaha kecil. "
+                    . "Gunakan bahasa sehari-hari yang sederhana. "
+                    . "Format output: nomor poin, diikuti penjelasan singkat dan jelas. "
+                    . "Maksimal 8 poin. "
+                    . "Di akhir, tambahkan satu baris catatan penting jika ada kewajiban atau batas waktu.\n\n"
+                    . "Teks:\n{$text}";
+
+                $response = Http::timeout(60)->withoutVerifying()->post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
+                    [
+                        'contents' => [['parts' => [['text' => $prompt]]]],
+                        'generationConfig' => ['temperature' => 0.3, 'maxOutputTokens' => 4096],
+                    ]
+                );
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $aiResult = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                    $result = $aiResult
+                        ? "📋 Rangkuman Teks\n\nBerikut adalah poin-poin penting:\n\n" . trim($aiResult)
+                            . "\n\n⚠️ Catatan: Rangkuman ini dibuat otomatis oleh AI."
+                        : $this->generateFallbackSummary('Teks Langsung');
+                } else {
+                    \Log::error('Gemini API error: ' . $response->body());
+                    $result = $this->generateFallbackSummary('Teks Langsung');
+                }
+            }
+
+            $summary->update(['status' => 'done', 'summary' => $result]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Teks berhasil dirangkum',
+                'data' => [
+                    'id' => $summary->id,
+                    'file_name' => $summary->file_name,
+                    'status' => $summary->status,
+                    'summary' => $summary->summary,
+                    'created_at' => $summary->created_at->format('Y-m-d H:i'),
+                ],
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error('Gagal rangkum teks: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memproses teks: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function summaryStatus(string $id): JsonResponse
     {
         $summary = Summary::findOrFail($id);
@@ -386,6 +464,89 @@ class DashboardController extends Controller
             'success' => true,
             'message' => 'Rangkuman berhasil dihapus',
         ]);
+    }
+
+    /**
+     * Simpan rangkuman sebagai PDF ke dokumen user
+     */
+    public function saveSummaryAsPdf(Request $request): JsonResponse
+    {
+        $request->validate([
+            'summary_id' => 'required|integer',
+            'user_id' => 'required|string',
+            'user_name' => 'required|string',
+            'user_email' => 'required|email',
+        ]);
+
+        $summary = Summary::findOrFail($request->summary_id);
+
+        if ($summary->status !== 'done' || empty($summary->summary)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rangkuman belum selesai atau kosong',
+            ], 400);
+        }
+
+        // Generate PDF dari teks rangkuman
+        $fileName = 'Rangkuman_' . str_replace(' ', '_', $summary->file_name) . '_' . date('Y-m-d') . '.pdf';
+
+        // Konversi teks ke HTML untuk PDF
+        $htmlContent = nl2br(e($summary->summary));
+        $html = '
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: sans-serif; font-size: 12px; line-height: 1.6; padding: 20px; }
+                h1 { font-size: 16px; color: #333; border-bottom: 2px solid #6d28d9; padding-bottom: 8px; }
+                .meta { font-size: 11px; color: #666; margin-bottom: 16px; }
+                .content { font-size: 12px; color: #333; }
+                .footer { font-size: 10px; color: #999; margin-top: 24px; border-top: 1px solid #ddd; padding-top: 8px; }
+            </style>
+        </head>
+        <body>
+            <h1>📋 Rangkuman Dokumen Pajak</h1>
+            <div class="meta">
+                <p><strong>Sumber:</strong> ' . e($summary->file_name) . '</p>
+                <p><strong>Tanggal:</strong> ' . date('d F Y H:i') . '</p>
+                <p><strong>Dihasilkan oleh:</strong> AI Pajak Pintar UMKM</p>
+            </div>
+            <div class="content">' . $htmlContent . '</div>
+            <div class="footer">
+                <p>Dokumen ini dibuat secara otomatis oleh sistem Pajak Pintar UMKM.</p>
+            </div>
+        </body>
+        </html>';
+
+        // Generate PDF
+        $pdf = Pdf::loadHTML($html);
+        $pdfContent = $pdf->output();
+
+        // Simpan ke storage
+        $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $fileName);
+        $userId = $request->input('user_id');
+        $path = "documents/{$userId}/{$safeName}";
+        Storage::disk('public')->put($path, $pdfContent);
+
+        // Simpan record ke tabel documents
+        $document = Document::create([
+            'user_id' => $userId,
+            'user_name' => $request->input('user_name'),
+            'user_email' => $request->input('user_email'),
+            'file_name' => $safeName,
+            'file_type' => 'PDF',
+            'file_size' => $this->formatFileSize(strlen($pdfContent)),
+            'file_path' => $path,
+            'status' => 'Tersimpan',
+            'category' => 'rangkuman_ai',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Rangkuman berhasil disimpan sebagai PDF',
+            'data' => $document,
+        ], 201);
     }
 
     /**
@@ -423,7 +584,7 @@ class DashboardController extends Controller
                 . "Isi dokumen:\n{$text}";
 
             $response = Http::timeout(60)->withoutVerifying()->post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}",
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
                 [
                     'contents' => [
                         [
@@ -434,7 +595,7 @@ class DashboardController extends Controller
                     ],
                     'generationConfig' => [
                         'temperature' => 0.3,
-                        'maxOutputTokens' => 1024,
+                        'maxOutputTokens' => 4096,
                     ],
                 ]
             );
@@ -486,5 +647,18 @@ class DashboardController extends Controller
             . "Untuk rangkuman AI yang lebih akurat, silakan konfigurasi GEMINI_API_KEY di file .env.";
 
         return $result;
+    }
+
+    /**
+     * Format ukuran file
+     */
+    private function formatFileSize(int $bytes): string
+    {
+        if ($bytes >= 1048576) {
+            return round($bytes / 1048576, 1) . ' MB';
+        } elseif ($bytes >= 1024) {
+            return round($bytes / 1024) . ' KB';
+        }
+        return $bytes . ' B';
     }
 }

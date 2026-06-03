@@ -189,4 +189,81 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Hapus user dari Supabase (admin atau user sendiri)
+     */
+    public function destroy(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id' => 'required|string',
+        ]);
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->supabaseServiceKey}",
+                'apikey' => $this->supabaseServiceKey,
+            ])->withoutVerifying()->delete("{$this->supabaseUrl}/auth/v1/admin/users/{$request->user_id}");
+
+            if ($response->failed()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal menghapus user',
+                ], 500);
+            }
+
+            // Hapus juga dokumen dan data terkait
+            Document::where('user_id', $request->user_id)->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'User berhasil dihapus',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus user: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Cek apakah user masih ada di Supabase
+     */
+    public function checkUser(Request $request): JsonResponse
+    {
+        $request->validate([
+            'user_id' => 'required|string',
+        ]);
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Bearer {$this->supabaseServiceKey}",
+                'apikey' => $this->supabaseServiceKey,
+            ])->withoutVerifying()->get("{$this->supabaseUrl}/auth/v1/admin/users/{$request->user_id}");
+
+            if ($response->successful()) {
+                $data = $response->json();
+                // Supabase mengembalikan data user langsung (ada 'id' field)
+                if (isset($data['id'])) {
+                    return response()->json([
+                        'success' => true,
+                        'exists' => true,
+                    ]);
+                }
+            }
+
+            // Jika 404 atau tidak ada data = user tidak ditemukan
+            return response()->json([
+                'success' => true,
+                'exists' => false,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'exists' => false,
+                'message' => 'Gagal mengecek user: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }
