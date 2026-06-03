@@ -3,7 +3,7 @@ nixPkgs = ["php84", "php84Extensions.pdo_mysql", "php84Extensions.mbstring", "ph
 
 [phases.install]
 dependsOn = ["setup"]
-cmds = ["curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer", "composer install --no-dev --optimize-autoloader"]
+cmds = ["curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer", "composer install --no-dev --optimize-autoloader --ignore-platform-reqs"]
 
 [phases.install]
 cmds = ["composer install --no-dev --optimize-autoloader"]
