@@ -19,7 +19,11 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+    'https://uas-production-4ad3.up.railway.app',
+    'https://uas-production-8a0b.up.railway.app',
+],
+
 
     'allowed_origins_patterns' => [],
 
